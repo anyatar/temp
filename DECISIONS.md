@@ -33,6 +33,11 @@ Short record of what we chose and why. Update when a decision changes.
 - **Ranking** shows only groups with 5 or more deals and reports how many groups were left out.
 - **Places outside the dataset** (a fixed list of other Israeli cities) are answered "no data for X", never with a country-wide answer.
 
+## Model choice
+- **Claude Haiku 5.5** (`claude-haiku-5-5`) for question parsing: the cheapest current Claude model, and parsing needs no reasoning (thinking off, effort low). The system prompt (valid cities, neighborhoods, enums) is prompt-cached.
+- **Considered and rejected: a free tier (Groq, open models).** Free-tier rate limits are designed not to cover 10k requests/day, so at peak most answers would come from the rule fallback; Hebrew quality of open models is unmeasured; and the paid cost is small. A hard monthly spend limit in the Anthropic Console caps the risk.
+- A Pro (claude.ai) subscription can't be used: it covers one person's use of Claude, not an app serving the public.
+
 ## Failure handling
 - **A keyword rule parser produces the same `Query` schema** and runs in parallel with the LLM every time.
 - **One total deadline (~4s) for the LLM call, including retries.** The SDK's built-in retries cover transient errors only (connection, 408/409/429/5xx). No retry on 400/401 or on output our schema check rejects.
