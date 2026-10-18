@@ -10,6 +10,7 @@ export const CASES: [string, object | null][] = [
   ["דירה חדשה מקבלן בבאר שבע", { type: "search", filters: { cities: ["באר שבע"], conditions: ["חדש מקבלן"] } }],
   ["דירות במודיעין שנמכרו ב-2024", { type: "search", filters: { cities: ["מודיעין-מכבים-רעות"], dateFrom: "2024", dateTo: "2024" } }],
   ["לפחות 5 חדרים ברמת גן", { type: "search", filters: { cities: ["רמת גן"], rooms: { min: 5 } } }],
+  ["4 חד׳ בכ״ס עד 6 מיל׳ עם ממ״ד", { type: "search", filters: { cities: ["כפר סבא"], rooms: { min: 4, max: 4 }, price: { max: 6_000_000 }, hasSafeRoom: true } }],
   ["דירות ארבעה חדרים בב\"ש", { type: "search", filters: { cities: ["באר שבע"], rooms: { min: 4, max: 4 } } }],
   // stat
   ["כמה עולה דירת 4 חדרים בכפר סבא?", { type: "stat", metric: "price", filters: { cities: ["כפר סבא"], rooms: { min: 4, max: 4 } } }],

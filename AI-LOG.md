@@ -14,3 +14,10 @@ How this was built with AI assistance (Claude Code). Newest last. Each entry say
 
 - **Bug in the AI's first version, caught by the quality report.** Duplicate detection compared every field except price and source, but price per m² is computed from price, so the 4 cross-source conflicts were all reported as "mismatched duplicates" and dropped from stats. The report's counts (`duplicate-id-mismatch: 4`, where 4 precedence decisions were expected) exposed it before any test was written. Fixed by excluding price per m² from the comparison; the precedence test now covers it.
 - **Thresholds checked against the data, not assumed.** The 3× outlier threshold from the design flags nothing in this file: the most extreme deals (₪44M and ₪38.5M penthouses) are 2.9× and 2.75× their city median.
+
+## 2026-10-19: LLM parser
+
+- **The AI's design hung, and I caught it.** The AI used the API's structured outputs to force the reply into our schema. Every call in the accuracy run timed out; a debug run without the deadline sat for minutes, and I stopped it ("after 5 mins and no CPU usage, I think you need another plan"). The partial output showed the cause: `400 Schema is too complex`, after a 41s wait. Switched to plain JSON in the reply, validated by our own zod schema, which we were doing anyway. Result: 0/30 → 29/30, ~0.8s per question.
+- **The AI's cost estimate was wrong by about 10×.** In the architecture it said "a few dollars a month" at 10k questions/day. Measured: $1.47 per 10k questions (~$44/month). Shrinking the schema in the prompt (shared references) cut it to $0.83 per 10k (~$25/month). Lesson: measure before quoting.
+- **A data alias the cleaning missed, found by the LLM evaluation.** One deal's neighborhood is "Florentin" (English) next to "פלורנטין"; the model chose the English one. Added a neighborhood alias table and a flag for any other Latin-script neighborhood name.
+- **The AI's prompt tweak didn't work.** For the ambiguous "כמה עלו" (cost vs. went up) the AI added a prompt rule; the model ignored it. The rule was removed rather than kept as dead weight, and the case stays in the evaluation as a known ambiguity.

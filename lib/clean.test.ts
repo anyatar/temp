@@ -41,6 +41,12 @@ test("normalizes city aliases, rooms suffix, currency, booleans, whitespace", ()
   assert.equal(d?.street, "הרצל");
 });
 
+test("neighborhood aliases are mapped; unknown Latin names are flagged", () => {
+  const r = run({ neighborhood: "Florentin" }, { deal_id: "D2", neighborhood: "Neve Tzedek" });
+  assert.equal(deal(r)?.neighborhood, "פלורנטין");
+  assert.deepEqual(deal(r, "D2")?.flags, [{ field: "neighborhood", reason: "latin-script-name", value: "Neve Tzedek" }]);
+});
+
 test("recomputes price per m² instead of trusting the CSV", () => {
   const r = run({ price_per_sqm: "99999" });
   assert.equal(deal(r)?.pricePerSqm, 40000);

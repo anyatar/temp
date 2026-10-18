@@ -37,6 +37,8 @@ Short record of what we chose and why. Update when a decision changes.
 - **Claude Haiku 5.5** (`claude-haiku-5-5`) for question parsing: the cheapest current Claude model, and parsing needs no reasoning (thinking off, effort low). The system prompt (valid cities, neighborhoods, enums) is prompt-cached.
 - **Considered and rejected: a free tier (Groq, open models).** Free-tier rate limits are designed not to cover 10k requests/day, so at peak most answers would come from the rule fallback; Hebrew quality of open models is unmeasured; and the paid cost is small. A hard monthly spend limit in the Anthropic Console caps the risk.
 - A Pro (claude.ai) subscription can't be used: it covers one person's use of Claude, not an app serving the public.
+- **The model's reply is plain JSON validated by our zod schema, not the API's structured outputs.** Structured outputs compile the schema into a grammar; ours (8 query types × ~15 optional filters) was rejected as "Schema is too complex" after ~40s. The schema now sits in the cached system prompt, written with shared references (4× smaller). Invalid JSON, an off-schema reply, a refusal or an unknown neighborhood all count as failures and go to the rule parser.
+- **Measured (30 Hebrew questions, `npm run eval-llm`):** 29/30 correct, median 0.8s, max 1.3s, **$0.83 per 10k questions** (~$25/month at 10k/day) before caching answers. The prompt is ~2.5k tokens and served from cache. The one miss is genuinely ambiguous Hebrew ("כמה עלו דירות בפלורנטין": cost, or went up?).
 
 ## Failure handling
 - **A keyword rule parser produces the same `Query` schema** and runs in parallel with the LLM every time.

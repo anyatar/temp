@@ -1,6 +1,6 @@
 // Deterministic cleaning of the raw deals CSV. No LLM. Every change is logged; every rejected row is kept in the report.
 import {
-  CONDITIONS, FALSE_WORDS, PROPERTY_TYPES, SOURCES, TRUE_WORDS, canonicalCity,
+  CONDITIONS, FALSE_WORDS, NEIGHBORHOOD_ALIASES, PROPERTY_TYPES, SOURCES, TRUE_WORDS, canonicalCity,
 } from "./aliases.ts";
 
 export const THRESHOLDS = {
@@ -111,6 +111,11 @@ function normalizeRow(
   if (!city) return "unknown-city";
   if (city !== t.city) fix("city", t.city, city, "city-alias");
 
+  const neighborhood = NEIGHBORHOOD_ALIASES.get(t.neighborhood.toLowerCase()) ?? t.neighborhood;
+  if (neighborhood !== t.neighborhood) fix("neighborhood", t.neighborhood, neighborhood, "neighborhood-alias");
+  // An unmapped Latin-script name is probably another alias: kept as is, but flagged for review.
+  if (/[A-Za-z]/.test(neighborhood)) flags.push({ field: "neighborhood", reason: "latin-script-name", value: neighborhood });
+
   if (!PROPERTY_TYPES.includes(t.property_type)) return "unknown-property-type";
   if (!SOURCES.includes(t.source)) return "unknown-source";
 
@@ -169,7 +174,7 @@ function normalizeRow(
   return {
     id: t.deal_id,
     city,
-    neighborhood: t.neighborhood || null,
+    neighborhood: neighborhood || null,
     street: t.street,
     propertyType: t.property_type,
     rooms,

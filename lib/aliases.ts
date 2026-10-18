@@ -16,10 +16,14 @@ export const CITY_ALIASES = new Map<string, string>([
   ["תל אביב", TLV], ['ת"א', TLV], ["tel aviv", TLV], ["tel aviv yafo", TLV],
   ["jerusalem", "ירושלים"],
   ['ב"ש', "באר שבע"],
+  ['כ"ס', "כפר סבא"], ['ר"ג', "רמת גן"], ['פ"ת', "פתח תקווה"], ['ראשל"צ', "ראשון לציון"], ["פתח תקוה", "פתח תקווה"],
   ["מודיעין", MODIIN],
 ]);
 
 export const canonicalCity = (raw: string) => CITY_ALIASES.get(cityKey(raw));
+
+// Neighborhood spellings found in the data, keyed by the variant.
+export const NEIGHBORHOOD_ALIASES = new Map([["florentin", "פלורנטין"]]);
 
 export const PROPERTY_TYPES = ["דירה", "דופלקס", "פנטהאוז", "דירת גן", "דירת גג", "בית פרטי"];
 export const CONDITIONS = ["חדש מקבלן", "משופץ", "במצב טוב", "שמור", "דורש שיפוץ"];

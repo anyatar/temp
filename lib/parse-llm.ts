@@ -1,7 +1,6 @@
 // LLM parser: Hebrew question → Query. The model sees the question and the valid values, never deal data,
 // and its output is schema-validated. Any failure returns { ok: false } and the caller falls back to the rule parser.
 import Anthropic from "@anthropic-ai/sdk";
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import { CITIES, CONDITIONS, PROPERTY_TYPES } from "./aliases.ts";
 import type { Vocabulary } from "./parse-rules.ts";
@@ -10,7 +9,9 @@ import { Query, type Filters } from "./schema.ts";
 export const MODEL = "claude-haiku-5-5";
 export const DEADLINE_MS = 4000; // total, including the SDK's retries; the user never waits longer than this
 
-const Output = z.object({ query: Query }); // structured outputs need an object at the root
+// Not the API's structured outputs: compiling this schema into a grammar fails ("Schema is too complex") after ~40s.
+// The schema goes in the (cached) prompt instead, and zod validates the reply below.
+const SCHEMA = JSON.stringify(z.toJSONSchema(Query, { reused: "ref" })); // shared parts written once: 4× smaller
 
 export function systemPrompt(vocab: Vocabulary, lastDealMonth: string) {
   const neighborhoods = [...vocab.neighborhoods]
@@ -44,7 +45,10 @@ Cities: ${CITIES.join(", ")}
 Property types: ${PROPERTY_TYPES.join(", ")}
 Conditions: ${CONDITIONS.join(", ")}
 Neighborhoods (neighborhood — city):
-${neighborhoods}`;
+${neighborhoods}
+
+Reply with only the JSON query object, no other text. It must validate against this JSON Schema:
+${SCHEMA}`;
 }
 
 const neighborhoodsIn = (f: Filters) => f.neighborhoods ?? [];
@@ -68,20 +72,25 @@ export async function parseLlm(
   const started = Date.now();
   const fail = (error: string): LlmResult => ({ ok: false, error, ms: Date.now() - started });
   try {
-    const res = await client.messages.parse(
+    const res = await client.messages.create(
       {
         model: MODEL,
         max_tokens: 1024,
         thinking: { type: "disabled" }, // parsing needs no reasoning, and latency matters
-        output_config: { effort: "low", format: zodOutputFormat(Output) },
+        output_config: { effort: "low" },
         system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
         messages: [{ role: "user", content: question }],
       },
       { signal: AbortSignal.timeout(DEADLINE_MS) },
     );
     if (res.stop_reason !== "end_turn") return fail(`stop-${res.stop_reason}`); // refusal, max_tokens...
-    const query = res.parsed_output?.query;
-    if (!query) return fail("unparseable");
+    const text = res.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
+    const json = text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1); // tolerate a code fence around it
+    let parsed: unknown;
+    try { parsed = JSON.parse(json); } catch { return fail("invalid-json"); }
+    const checked = Query.safeParse(parsed);
+    if (!checked.success) return fail("schema-mismatch");
+    const query = checked.data;
     const unknown = unknownNeighborhood(query, vocab);
     if (unknown) return fail(`unknown-neighborhood:${unknown}`);
     return { ok: true, query, ms: Date.now() - started, usage: res.usage };
@@ -89,7 +98,7 @@ export async function parseLlm(
     if (e instanceof Anthropic.APIUserAbortError) return fail("timeout");
     if (e instanceof Anthropic.APIConnectionError) return fail("connection");
     if (e instanceof Anthropic.APIError) return fail(`api-${e.status}`);
-    console.error("LLM parse failed:", e); // unexpected: missing credentials, invalid output for our schema...
+    console.error("LLM parse failed:", e); // unexpected, e.g. missing credentials
     return fail(e instanceof Error ? e.name : "error");
   }
 }
