@@ -7,7 +7,7 @@ export const THRESHOLDS = {
   minPrice: 100_000,
   minSizeSqm: 15,
   maxSizeSqm: 1000,
-  flagRatio: 3, // price/m² this many times off the city median: flagged, excluded from stats
+  flagRatio: 2.5, // price/m² this many times off the city median: flagged, excluded from stats
   quarantineRatio: 10, // ...this many times off: almost certainly a typo
   minCityDeals: 10, // cities with fewer priced deals compare against the national median
   newBuildMaxAge: 5, // "new from contractor" sold more than this many years after construction is contradictory

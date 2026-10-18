@@ -47,7 +47,7 @@ Short record of what we chose and why. Update when a decision changes.
   - **Price conflicts within the same source:** keep the deal, show both prices with a badge, **leave it out of price statistics.** Never average and never pick one: either would create a price nobody reported.
 - **Implausible values (guardrails):**
   - Impossible (price ≤ 0 or below a floor, size outside ~15–1000 m², future dates) → quarantine.
-  - Price per m² ~3× off the city median (national median if the city is thin) → flag, excluded from statistics.
+  - Price per m² ≥2.5× off the city median (national median if the city is thin) → flag as **suspected, pending human review**. The deal stays in the dataset and in search (with a badge) but is excluded from statistics until reviewed. 2.5× was chosen after inspecting the data: it catches exactly the two penthouses (₪44M Pisgat Ze'ev, ₪38.5M Ramat Gan) that look wrong against every peer group; 2× would also catch two deals that are explainable against similar deals; 3× catches nothing.
   - ~10× off → quarantine (likely a typo).
   - Contradictions (e.g. "new from contractor" built in 1950) → flag the field, not the row.
   - **Never auto-correct** (e.g. ×10 for a "missing zero"); that would be inventing data.
@@ -59,3 +59,4 @@ Short record of what we chose and why. Update when a decision changes.
 ## Later / cut
 - **Unparseable values:** the LLM suggests alias mappings offline, they pass the same validators, a human approves, and they become deterministic rules. Approval through a token-protected one-page admin UI. **First to cut** if time runs short.
 - Source-precedence admin UI: dropped; precedence stays in config.
+- **Human review of suspected deals:** the queue is already in `quality.json` (`flagged`). A review UI (confirm → back into stats, reject → quarantine) is future work.
