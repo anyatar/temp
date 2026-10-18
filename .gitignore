@@ -1,0 +1,6 @@
+node_modules/
+.env*
+!.env.example
+
+# Employer brief: not ours to publish
+madlan_tech_challenge*.md
