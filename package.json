@@ -2,10 +2,15 @@
   "name": "madlan-deals",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
+    "clean-data": "node scripts/clean.ts",
+    "predev": "npm run clean-data",
     "dev": "next dev",
+    "prebuild": "npm run clean-data",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "test": "node --test \"lib/*.test.ts\""
   },
   "dependencies": {
     "next": "16.4.2",

@@ -51,7 +51,10 @@ Short record of what we chose and why. Update when a decision changes.
   - ~10× off → quarantine (likely a typo).
   - Contradictions (e.g. "new from contractor" built in 1950) → flag the field, not the row.
   - **Never auto-correct** (e.g. ×10 for a "missing zero"); that would be inventing data.
-  - Thresholds are placeholders until checked against the real distribution.
+  - Missing size: the row stays; price per m² is unknown, so it only counts toward total-price statistics.
+  - Garden apartment above floor 1 is flagged in the report only (it can't change any answer).
+  - Not checked: elevator in a low building (plausible in private houses).
+  - Thresholds live in `THRESHOLDS` in `lib/clean.ts` and are copied into `quality.json`.
 
 ## Later / cut
 - **Unparseable values:** the LLM suggests alias mappings offline, they pass the same validators, a human approves, and they become deterministic rules. Approval through a token-protected one-page admin UI. **First to cut** if time runs short.
