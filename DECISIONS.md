@@ -38,7 +38,11 @@ Short record of what we chose and why. Update when a decision changes.
 - **Considered and rejected: a free tier (Groq, open models).** Free-tier rate limits are designed not to cover 10k requests/day, so at peak most answers would come from the rule fallback; Hebrew quality of open models is unmeasured; and the paid cost is small. A hard monthly spend limit in the Anthropic Console caps the risk.
 - A Pro (claude.ai) subscription can't be used: it covers one person's use of Claude, not an app serving the public.
 - **The model's reply is plain JSON validated by our zod schema, not the API's structured outputs.** Structured outputs compile the schema into a grammar; ours (8 query types × ~15 optional filters) was rejected as "Schema is too complex" after ~40s. The schema now sits in the cached system prompt, written with shared references (4× smaller). Invalid JSON, an off-schema reply, a refusal or an unknown neighborhood all count as failures and go to the rule parser.
-- **Measured (30 Hebrew questions, `npm run eval-llm`):** 29/30 correct, median 0.8s, max 1.3s, **$0.83 per 10k questions** (~$25/month at 10k/day) before caching answers. The prompt is ~2.5k tokens and served from cache. The one miss is genuinely ambiguous Hebrew ("כמה עלו דירות בפלורנטין": cost, or went up?).
+- **Measured (30 Hebrew questions, `npm run eval-llm`):** 29/30 correct, median 0.8s, max 1.3s, **$0.83 per 10k questions** (~$25/month at 10k/day) before caching answers.
+- **Cost model (verified against the live pricing page: input $0.10, 5-min cache write $0.125, cache read $0.01, output $0.50 per million tokens).** Per question: the system prompt is 4,167 tokens (mostly Hebrew neighborhood names; Hebrew is ~1 token per character), plus ~26 tokens of question and ~53 tokens of JSON output.
+  - Cache warm: ~$0.00007 → **~$21/month** at 10k/day. At ~7 requests/minute every hit refreshes the 5-minute cache, so only quiet periods (nights) pay a cache write: a few cents a day.
+  - No cache at all: ~$0.00045 → **~$135/month**. Cache writes on every call (worst case): ~$0.00055 → ~$165/month.
+  - Not included: free tiers for hosting and Redis; abuse, which the rate limit and the console spend cap bound. The one miss is genuinely ambiguous Hebrew ("כמה עלו דירות בפלורנטין": cost, or went up?).
 
 ## Failure handling
 - **A keyword rule parser produces the same `Query` schema** and runs in parallel with the LLM every time.
