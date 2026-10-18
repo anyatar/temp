@@ -8,10 +8,10 @@ export const CITIES = [
   "כפר סבא", MODIIN, "נתניה", "פתח תקווה", "ראשון לציון", "רחובות", "רמת גן", "רעננה", TLV,
 ];
 
-const cityKey = (s: string) =>
+export const cityKey = (s: string) =>
   s.trim().toLowerCase().replace(/״/g, '"').replace(/[-–]/g, " ").replace(/\s+/g, " ");
 
-const CITY_ALIASES = new Map<string, string>([
+export const CITY_ALIASES = new Map<string, string>([
   ...CITIES.map((c): [string, string] => [cityKey(c), c]),
   ["תל אביב", TLV], ['ת"א', TLV], ["tel aviv", TLV], ["tel aviv yafo", TLV],
   ["jerusalem", "ירושלים"],
@@ -28,3 +28,12 @@ export const SOURCES = ["רשות המסים", "מתווך", "בעל נכס"];
 
 export const TRUE_WORDS = ["כן", "yes", "true", "1"];
 export const FALSE_WORDS = ["לא", "no", "false", "0"];
+
+// Places a user may ask about that the dataset doesn't cover: answered with an explicit "no data", never a country-wide answer.
+export const OTHER_PLACES = [
+  "אילת", "עפולה", "טבריה", "נצרת", "הוד השרון", "כפר יונה", "קריית גת", "קריית שמונה", "קריית אתא", "קריית ביאליק",
+  "קריית מוצקין", "קריית ים", "קריית אונו", "קריית מלאכי", "אשקלון", "נהריה", "עכו", "כרמיאל", "צפת", "דימונה", "ערד",
+  "אופקים", "שדרות", "נתיבות", "יבנה", "נס ציונה", "לוד", "רמלה", "ראש העין", "אור יהודה", "יהוד", "בני ברק", "אלעד",
+  "ביתר עילית", "מעלה אדומים", "אריאל", "זכרון יעקב", "חדרה", "קיסריה", "פרדס חנה", "טירת כרמל", "נשר", "יקנעם",
+  "מגדל העמק", "בית שאן", "רהט", "רמת השרון", "גבעת שמואל",
+];

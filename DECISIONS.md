@@ -24,6 +24,15 @@ Short record of what we chose and why. Update when a decision changes.
 - **Grounding the user can see:** the interpretation shown as chips ("הבנתי: ..."), n and the date span, any widening, excluded or flagged deals, the deals behind every number, and which parser handled the question.
 - **Medians, not averages.** Below about 5 deals, show the deals but no statistic.
 
+## Query engine (`lib/engine.ts`)
+- **One `Query` schema** (`lib/schema.ts`, zod) is the contract for both parsers. Cities and enums are closed lists, so a parser can't invent a city.
+- **Unknown never matches:** a deal with unknown parking or condition doesn't match a parking or condition filter.
+- **Widening order** when fewer than 5 usable deals: drop the street, then the neighborhood, then widen rooms by ±0.5. Each step is reported. **Comparison never widens**, because widening one side would make the sides incomparable.
+- **Budget** ("what can I buy for X") looks at deals priced 80–100% of X, grouped by city. Sizes get a median only when a city has 5 or more deals; otherwise only actual min–max ranges are shown.
+- **Price check** compares price per m² when the user gives a size, otherwise the total price, and reports the percentile among comparable deals.
+- **Ranking** shows only groups with 5 or more deals and reports how many groups were left out.
+- **Places outside the dataset** (a fixed list of other Israeli cities) are answered "no data for X", never with a country-wide answer.
+
 ## Failure handling
 - **A keyword rule parser produces the same `Query` schema** and runs in parallel with the LLM every time.
 - **One total deadline (~4s) for the LLM call, including retries.** The SDK's built-in retries cover transient errors only (connection, 408/409/429/5xx). No retry on 400/401 or on output our schema check rejects.
