@@ -104,6 +104,14 @@ function dates(text: string): Pick<Filters, "dateFrom" | "dateTo"> {
 
 export type Vocabulary = { neighborhoods: Map<string, string[]> }; // neighborhood → cities it appears in
 
+export function buildVocabulary(deals: { city: string; neighborhood: string | null }[]): Vocabulary {
+  const neighborhoods = new Map<string, string[]>();
+  for (const d of deals)
+    if (d.neighborhood && !neighborhoods.get(d.neighborhood)?.includes(d.city))
+      neighborhoods.set(d.neighborhood, [...(neighborhoods.get(d.neighborhood) ?? []), d.city]);
+  return { neighborhoods };
+}
+
 export function parseRules(question: string, vocab: Vocabulary): Query | null {
   const text = question.replace(/[״“”]/g, '"').replace(/[׳‘’`]/g, "'").replace(/\s+/g, " ").trim();
   const cityText = cityKey(text);

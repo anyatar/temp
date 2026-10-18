@@ -10,9 +10,11 @@
     "prebuild": "npm run clean-data",
     "build": "next build",
     "start": "next start",
-    "test": "node --test \"lib/*.test.ts\""
+    "test": "node --test \"lib/*.test.ts\"",
+    "eval-llm": "node --env-file=.env.local scripts/eval-llm.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.135.0",
     "next": "16.4.2",
     "react": "19.3.0",
     "react-dom": "19.3.0",
