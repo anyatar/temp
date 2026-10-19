@@ -204,14 +204,17 @@ td {
   gap: 1rem;
   cursor: pointer;
 }
+/* Flex, not inline text: price and date are both numbers, and the bidi algorithm can run them together in RTL. */
 .deal .price {
+  display: flex;
+  align-items: baseline;
+  gap: 1.25rem;
   white-space: nowrap;
   font-weight: 600;
 }
 .deal .price small {
   font-weight: normal;
   color: var(--muted);
-  margin-inline-start: 0.5rem;
 }
 .deal dl {
   display: grid;
