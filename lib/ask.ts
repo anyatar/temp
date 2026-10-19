@@ -1,6 +1,7 @@
 // The /api/ask logic, kept out of the route so it can be tested with a fake model.
 import type { Deal } from "./clean.ts";
 import { answer } from "./engine.ts";
+import { PRESET_QUERIES } from "./examples.ts";
 import type { LlmResult } from "./parse-llm.ts";
 import { parseRules, type Vocabulary } from "./parse-rules.ts";
 import type { Query } from "./schema.ts";
@@ -18,6 +19,10 @@ export async function ask(body: unknown, { deals, vocab, llm: parseLlm }: AskDep
   const question = typeof raw === "string" ? raw.trim() : "";
   if (!question || question.length > MAX_QUESTION)
     return { status: 400, body: { error: `question must be 1–${MAX_QUESTION} characters` } };
+
+  // An example question from the start page: its query is known in advance, so no model call.
+  const preset = PRESET_QUERIES.get(question);
+  if (preset) return { status: 200, body: { question, parsedBy: "preset", query: preset, answer: answer(preset, deals) } };
 
   const rules = parseRules(question, vocab);
   const llm = await parseLlm(question);

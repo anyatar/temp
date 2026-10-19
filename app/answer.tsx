@@ -10,7 +10,7 @@ import {
 
 export type AskResponse = {
   question: string;
-  parsedBy: "llm" | "rules" | null;
+  parsedBy: "preset" | "llm" | "rules" | null;
   query?: Query;
   alternative?: Query;
   answer?: Answer;

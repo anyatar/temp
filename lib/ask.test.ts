@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { MAX_QUESTION, ask } from "./ask.ts";
+import { EXAMPLES } from "./examples.ts";
 import type { Deal } from "./clean.ts";
 import type { LlmResult } from "./parse-llm.ts";
 import type { Query } from "./schema.ts";
@@ -56,4 +57,15 @@ test("parsers disagree on a city the rules saw: answer with the model, offer the
 test("no warning when the model finds a city the rules missed", async () => {
   const r = await run("דירות בעיר הלבנה", modelSays({ type: "search", filters: { cities: ["תל אביב-יפו"] } })); // a nickname only the model knows
   assert.equal(r.body.alternative, undefined);
+});
+
+test("example questions use their preset query and never call the model", async () => {
+  let called = false;
+  const llm = async (): Promise<LlmResult> => { called = true; return modelFails(); };
+  for (const [question, query] of EXAMPLES) {
+    const r = await run(` ${question} `, llm); // surrounding spaces are trimmed
+    assert.equal(r.body.parsedBy, "preset");
+    assert.deepEqual(r.body.query, query);
+  }
+  assert.equal(called, false);
 });

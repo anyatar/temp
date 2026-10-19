@@ -2,17 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { EXAMPLES } from "@/lib/examples.ts";
 import { AnswerView, type AskResponse } from "./answer.tsx";
 
-// One example per question type the app answers well.
-const EXAMPLES = [
-  "כמה עולה דירת 4 חדרים בכפר סבא?",
-  "3.2 מיליון ל-4 חדרים בכפר סבא, זה סביר?",
-  "יש לי 2 מיליון, מה אפשר לקנות?",
-  "איפה הכי זול לקנות 3 חדרים?",
-  "רמת גן מול גבעתיים",
-  "איך השתנו המחירים בחולון מאז 2022?",
-];
 const MAX_QUESTION = 300; // same limit as the API
 
 type Turn = { question: string; res?: AskResponse; error?: string };
@@ -53,7 +45,7 @@ export default function Home() {
   // On the start page they wrap in the middle; during a conversation they stay one scrollable row above the input.
   const examples = (
     <div className={turns.length ? "examples compact" : "examples"} aria-label="שאלות לדוגמה">
-      {EXAMPLES.map((q) => (
+      {EXAMPLES.map(([q]) => (
         <button key={q} type="button" disabled={busy} onClick={() => ask(q)}>{q}</button>
       ))}
     </div>

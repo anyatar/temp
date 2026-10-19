@@ -44,6 +44,12 @@ Short record of what we chose and why. Update when a decision changes.
   - No cache at all: ~$0.00045 → **~$135/month**. Cache writes on every call (worst case): ~$0.00055 → ~$165/month.
   - Not included: free tiers for hosting and Redis; abuse, which the rate limit and the console spend cap bound. The one miss is genuinely ambiguous Hebrew ("כמה עלו דירות בפלורנטין": cost, or went up?).
 
+## Example questions
+- **The six start-page examples have their query worked out in advance** (`lib/examples.ts`). A click skips the model: ~40 ms instead of ~1 s, and no cost. They are the most-clicked questions, especially in a demo.
+- **Only the query is precomputed, not the answer:** the engine still computes it from the data on each click (0.02 ms), so the examples stay correct after the data file changes.
+- A test checks each preset is a valid query and equal to what the rule parser produces for the same text, so the two can't drift apart. A typed question matches a preset only if it is exactly the same text (after trimming spaces); anything else goes to the model as usual.
+- Not precomputed on purpose: answers for typed questions. Measured engine time is 0.02 ms per question on today's data (1.7 ms at 100× the deals, 19 ms at 1000×), against ~800 ms for the model, so precomputing statistics would save nothing noticeable. Repeated typed questions are the job of the planned Redis cache (question → parsed query).
+
 ## Failure handling
 - **A keyword rule parser produces the same `Query` schema** and runs in parallel with the LLM every time.
 - **One total deadline (~4s) for the LLM call, including retries.** The SDK's built-in retries cover transient errors only (connection, 408/409/429/5xx). No retry on 400/401 or on output our schema check rejects.

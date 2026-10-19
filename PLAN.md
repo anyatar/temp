@@ -53,7 +53,7 @@ Search, statistic, price check, budget, ranking, comparison, trend. Declined wit
 - Cleaning: 530 rows in → 518 deals, 2 quarantined (₪0, ₪18,000), 2 suspected outliers pending review, every change logged.
 - LLM parsing: 29/30 Hebrew test questions correct; median 0.8s, max 1.3s. The miss is genuinely ambiguous ("כמה עלו" = cost, or went up?).
 - Cost: ~$0.00007 per question with the prompt cache warm (~$21/month at 10k/day).
-- Tests: 73 passing (`npm test`), including the `/api/ask` logic with a fake model and a regression test pinning what cleaning produces from the real CSV. Live accuracy check: `npm run eval-llm`.
+- Tests: 80 passing (`npm test`), including the `/api/ask` logic with a fake model and a regression test pinning what cleaning produces from the real CSV. Live accuracy check: `npm run eval-llm`.
 
 ## Not verified yet
 
