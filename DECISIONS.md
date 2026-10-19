@@ -51,12 +51,12 @@ Short record of what we chose and why. Update when a decision changes.
 - Not precomputed on purpose: answers for typed questions. Measured engine time is 0.02 ms per question on today's data (1.7 ms at 100× the deals, 19 ms at 1000×), against ~800 ms for the model, so precomputing statistics would save nothing noticeable. Repeated typed questions are the job of the planned Redis cache (question → parsed query).
 
 ## Failure handling
-- **A keyword rule parser produces the same `Query` schema** and runs in parallel with the LLM every time.
+- **A keyword rule parser produces the same `Query` schema** and runs on every question, before the LLM call.
 - **One total deadline (~4s) for the LLM call, including retries.** The SDK's built-in retries cover transient errors only (connection, 408/409/429/5xx). No retry on 400/401 or on output our schema check rejects.
-- **Fallback order:** LLM, then the rule parser ("פענוח בסיסי"), then a pre-filled filter form.
-- **If the LLM and the rule parser disagree** on a concrete entity (city, type), show both interpretations and let the user choose.
-- **Circuit breaker:** after about 5 LLM failures in a minute, skip the LLM for 60s (Redis key with an expiry).
-- **Cost guards:** per-IP rate limit, a daily request cap (then rules-only), and a monthly spend limit set in the Anthropic console.
+- **Fallback order:** LLM, then the rule parser, then a Hebrew "not understood" message with guidance. (A pre-filled filter form was planned and not built.)
+- **If the LLM and the rule parser disagree on a city** the rules found explicitly, the answer uses the LLM's reading and the UI shows a note with the rules' reading.
+- **Planned, not built yet:** a circuit breaker (after ~5 LLM failures in a minute, skip the LLM for 60s via a Redis key with an expiry), a per-IP rate limit and a daily request cap (then rules only).
+- **Built:** the monthly spend limit, set in the Anthropic Console (outside the code).
 
 ## Data cleaning (deterministic, at build time)
 - **`scripts/clean.ts`: `data/deals.csv` → `deals.json` + `quality.json`.** Same input, same output. No LLM.

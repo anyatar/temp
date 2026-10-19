@@ -1,63 +1,401 @@
-# Plan
+# Plan and system blueprint
 
-Written retroactively on 2026-10-19 from the design discussion and the commit history. Status as of commit `0721c18`.
-Why each choice was made lives in `DECISIONS.md`; where the AI was wrong or redirected lives in `AI-LOG.md`.
+A full description of the system as built, written so the same design can be reused for a similar project:
+a natural-language question app over a tabular dataset, where an LLM interprets the question and plain code computes every answer.
 
-## Goal
+- Written retroactively on 2026-10-19 from the design discussion and the commit history; status as of commit `e8cbb78`.
+- **Why** each choice was made: `DECISIONS.md`. **Where the AI was wrong or redirected:** `AI-LOG.md`. This file says **what** exists and **how** to rebuild or deploy it.
 
-A Hebrew, right-to-left web app where a **home buyer** asks free-text questions about Israeli residential deals and gets answers computed only from the data, with the sample size shown. The LLM turns the question into a structured query; plain code computes every number. Deployed publicly, at 10k requests/day, on our own budget.
+---
 
-## Shape
+## 1. What the system does
+
+A Hebrew, right-to-left web app. A **home buyer** asks free-text questions about Israeli residential property deals ("כמה עולה דירת 4 חדרים בכפר סבא?") and gets answers computed only from the deals data, always with the number of deals behind them.
+
+Requirements it was built against:
+1. Live, public URL.
+2. Hebrew, RTL.
+3. The LLM does real work (not a summary wrapper).
+4. 10,000 requests/day on our own budget, with a known cost.
+5. Never states things the data doesn't support.
+6. Survives the model being slow, wrong or unavailable.
+7. Built with AI assistance, with a log of how.
+
+The core idea that satisfies 3, 5 and 6 together: **the LLM only translates the question into a structured query. It never sees the data and never writes the answer.**
+
+---
+
+## 2. Architecture
 
 ```
-build time:  data/deals.csv → scripts/clean.ts → data/deals.json + data/quality.json
-request:     question → rule parser ┐
-                      → LLM parser  ┴→ Query (zod-validated) → engine → answer + n → Hebrew UI
+BUILD TIME (npm run build)
+  data/deals.csv ──► scripts/clean.ts ──► data/deals.json    (clean deals, bundled into the server)
+                     (lib/clean.ts)   └─► data/quality.json  (every fix, flag and quarantine, for /admin)
+
+REQUEST TIME (POST /api/ask)
+  question ─► validate (1–300 chars)
+           ─► exact example question? ──yes──► preset query (lib/examples.ts), no model call
+           ─► rule parser (lib/parse-rules.ts) ─────────────┐
+           ─► LLM parser  (lib/parse-llm.ts, 4s deadline) ──┤
+                                                            ▼
+                     LLM query if valid, else rule query, else "not understood"
+                     (+ warning if the two disagree on a city)
+                                                            ▼
+                     engine (lib/engine.ts): filter → median / percentile / group, min 5 deals, widening
+                                                            ▼
+                     JSON { parsedBy, query, answer } ─► Hebrew UI (app/answer.tsx, lib/render.ts)
 ```
 
-The LLM never sees deal rows and never writes numbers. If it is slow, down or wrong, the rule parser's query is used.
+**Trust boundaries** (where input is checked):
+- the question (length, type), in `lib/ask.ts`
+- the model's reply: parsed as JSON, validated with zod, neighborhoods checked against the data, in `lib/parse-llm.ts`
+- the admin password and session cookie, in `lib/admin-auth.ts`
 
-## Steps
+---
+
+## 3. Stack
+
+| Part | Choice | Version / note |
+|---|---|---|
+| Runtime | Node.js | **24.x**, pinned in `package.json` `engines`. Needed to run `.ts` scripts directly (type stripping) and for `Map.groupBy` |
+| Framework | Next.js (App Router) + React | Next 16.4.2, React 19.3. `cacheComponents: true` in `next.config.ts` |
+| Bundler | **Webpack** (`--webpack`) | Not Turbopack: the dev machine's Windows Application Control blocks Next's native compiler (`DECISIONS.md`) |
+| Language | TypeScript | `allowImportingTsExtensions` so the same files run in Node and Next |
+| Validation | zod 4 | One schema for both runtime checks and TypeScript types |
+| LLM | Anthropic SDK `@anthropic-ai/sdk` 0.135, model `claude-haiku-5-5` | Plain JSON reply, validated by zod (not structured outputs) |
+| Tests | Node's built-in test runner (`node --test`) | No test framework dependency |
+| Font | Heebo via `next/font/google` | Hebrew + Latin subsets |
+| Storage | **None** | Data is bundled at build. Redis (Upstash) is planned for the rate limit and cache |
+| Hosting | Vercel (Hobby, free) | See section 10 |
+
+Runtime dependencies are only `next`, `react`, `react-dom`, `zod` and `@anthropic-ai/sdk`. The CSV parser is ~20 lines of our own.
+
+---
+
+## 4. Repository layout
+
+```
+data/
+  deals.csv              raw input (committed)
+  deals.json             generated by cleaning (git-ignored)
+  quality.json           generated report (git-ignored)
+scripts/
+  clean.ts               CSV → deals.json + quality.json (runs before dev and build)
+  eval-llm.ts            accuracy, latency and cost check against the real model (costs money)
+lib/                     all logic; plain TypeScript, no framework code
+  aliases.ts             canonical cities and spellings, property types, conditions, sources (+ precedence),
+                         booleans, neighborhood aliases, places outside the dataset
+  clean.ts               CSV parser, normalization, dedupe, outliers, contradictions, report; THRESHOLDS
+  schema.ts              zod Query schema: the contract between parsers and engine
+  engine.ts              answers a Query from the deals; MIN_N, widening, the 7 question types
+  parse-rules.ts         keyword parser (Hebrew → Query), the fallback; buildVocabulary
+  parse-llm.ts           LLM parser: system prompt, call, deadline, validation, failure codes
+  ask.ts                 /api/ask orchestration (validation, presets, parsers, choice, cross-check)
+  examples.ts            the 6 start-page questions with their precomputed queries
+  render.ts              Hebrew wording: chips, verdicts, dates, decline messages, flag labels
+  admin-auth.ts          password check and signed session cookie
+  questions.ts           shared Hebrew test questions (rule tests + LLM evaluation)
+  *.test.ts              tests (section 8)
+app/
+  layout.tsx             <html lang="he" dir="rtl">, Heebo font, metadata
+  page.tsx               client page: start screen, examples, conversation, input bar
+  answer.tsx             answer view per question type, interpretation chips, deal list
+  globals.css            all styles (CSS variables, dark mode, chat and admin)
+  api/ask/route.ts       thin wrapper: loads data once, calls lib/ask.ts
+  admin/page.tsx         read-only data-quality report (after login)
+  admin/login/page.tsx   password form
+  admin/actions.ts       login / logout server actions
+AGENTS.md, CLAUDE.md     working rules for AI assistants on this repo
+DECISIONS.md, AI-LOG.md, PLAN.md
+.env.example             the two environment variables
+```
+
+---
+
+## 5. Data pipeline (`lib/clean.ts`, run by `scripts/clean.ts`)
+
+Deterministic: the same CSV always gives the same output. No LLM involved.
+
+**Every issue ends in one of three outcomes, always recorded:**
+- **Fixed:** the value is normalized and the change is logged (`changes`: id, field, before, after, rule).
+- **Flagged:** the row stays, but a field is untrusted (set to unknown) or the deal is excluded from statistics pending review.
+- **Quarantined:** the row is left out of search and statistics, and kept in the report with its reason.
+
+**Normalization rules:**
+| Field | Rule |
+|---|---|
+| All text | Trim, collapse spaces |
+| City | Alias table (`ת"א`, `Tel Aviv-Yafo`, `תל אביב יפו` → `תל אביב-יפו`). Dashes, case and Hebrew quote marks are normalized before lookup. Unknown city → quarantine |
+| Neighborhood | Alias table (`Florentin` → `פלורנטין`); any remaining Latin-script name is flagged |
+| Rooms | `"4 חדרים"` → 4; must be 1–12 in steps of 0.5 |
+| Price | Strip `₪` and commas; missing → quarantine; below ₪100,000 → quarantine |
+| Size | Optional; outside 15–1,000 m² → quarantine |
+| Date | ISO, `dd/mm/yyyy`, `dd.mm.yyyy` (day-first), `Aug 2025` (month only, marked approximate); invalid or future → quarantine |
+| Booleans | `כן/yes/TRUE/1` → true, `לא/no/FALSE/0` → false, blank → unknown (never false) |
+| Floor, floors, year, condition | Invalid → unknown + flag |
+| Price per m² | Always recomputed from price ÷ size; a different CSV value is logged |
+
+**Whole-dataset rules:**
+- **Duplicate IDs:** exact copies merge. Different prices from different sources → precedence **tax authority > broker > owner**, losing value logged. Different prices from the **same** source → keep the deal, show both prices, exclude it from statistics. Other differences → keep the first, flag it, exclude it.
+- **Outliers:** price per m² vs. the city median (national median if the city has fewer than 10 priced deals). ≥2.5× off → flagged "pending review", excluded from statistics, still searchable. ≥10× off → quarantine. **Never auto-corrected.**
+- **Contradictions:** "new from contractor" more than 5 years after construction → condition set to unknown (the row still counts). Garden apartment above floor 1 → report only.
+- **Possible duplicates under different IDs** (same city, street, rooms, size, date) → report only.
+
+All thresholds are in `THRESHOLDS` in `lib/clean.ts`, and are copied into `quality.json`.
+
+**Results on the current file:** 530 rows → 518 deals; 2 quarantined (₪0, ₪18,000); 2 pending review (₪44M and ₪38.5M penthouses); 6 copies merged; 4 resolved by precedence.
+
+---
+
+## 6. Query layer
+
+### 6.1 Schema (`lib/schema.ts`)
+One zod schema, used by both parsers, the engine, the LLM prompt (converted to JSON Schema) and TypeScript types.
+
+- **Filters** (all optional, unknown fields rejected): cities, neighborhoods, streets, property types, conditions (closed lists for cities, types, conditions); ranges for rooms, size, price, price per m²; booleans for elevator, parking, balcony, safe room; `dateFrom` / `dateTo` as `YYYY` or `YYYY-MM`.
+- **Query types:** `search`, `stat` (metric: price or per m²), `priceCheck` (price, optional size), `budget`, `ranking` (by city or neighborhood, cheapest or most expensive), `compare` (shared filters + exactly 2 groups), `trend`, `unsupported` (forecast, advice, notInData + place, other).
+
+### 6.2 Engine (`lib/engine.ts`)
+- **Filtering:** unknown values never match a filter (unknown parking doesn't count as "with parking").
+- **Statistics:** medians and 25th/75th percentiles, never averages. **Fewer than 5 usable deals → no statistic**, only the deals themselves. Flagged deals are excluded and counted ("not including N unusual deals").
+- **Widening** (statistic and price check only), when fewer than 5 deals: drop street → drop neighborhood → rooms ±0.5. Each step is reported to the user. **Comparison never widens.**
+- **Per type:**
+  - search: up to 50 newest deals, plus the total count
+  - stat: median and range
+  - priceCheck: percentile among comparable deals (per m² if a size is given)
+  - budget: deals at 80–100% of the budget, by city
+  - ranking: median per m², only groups with 5+ deals, plus a count of groups left out
+  - compare: two sides, each with its own n
+  - trend: median per year, with thin years and the partial last year marked
+
+### 6.3 Rule parser (`lib/parse-rules.ts`)
+Keyword parsing of Hebrew, with no model:
+- Cities (aliases, Hebrew prefix letters ב/ל/מ/ו/ה/ש), neighborhoods from the data (ambiguous names need a city), and places outside the dataset → "no data for X".
+- Rooms (digits, Hebrew number words, ranges, "at least"), money (מיליון / מיל׳ / אלף / plain numbers ≥100,000, "עד" / "מעל" / "בין … ל…"), size, years, property types, conditions, features (with or without).
+- Intent from keyword lists, in priority order: decline (forecast, advice, not in data) → trend → compare → ranking → budget → price check → statistic → search. Nothing recognized → `null`.
+- `buildVocabulary(deals)` maps each neighborhood to the cities it appears in.
+
+### 6.4 LLM parser (`lib/parse-llm.ts`)
+- **Model:** `claude-haiku-5-5`, thinking disabled, effort low, `max_tokens` 1024.
+- **System prompt** (~4,150 tokens, cached with `cache_control`): the query types, filter rules, decline rules, the latest data month (for "last year"), the valid cities, types and conditions, every "neighborhood — city" pair, and the JSON Schema of `Query` (zod `toJSONSchema` with shared references, 4× smaller).
+- **The user message is only the question.** No deal data is ever sent.
+- **Deadline:** 4 seconds total (`AbortSignal.timeout`), including the SDK's retries (2, transient errors only).
+- **Validation:** extract the JSON object (code fences tolerated) → `JSON.parse` → `Query.safeParse` → every neighborhood must exist in the data.
+- **Every failure is a result, not an exception:** `timeout`, `connection`, `api-<status>`, `stop-refusal`, `stop-max_tokens`, `invalid-json`, `schema-mismatch`, `unknown-neighborhood:<name>`.
+
+### 6.5 Orchestration (`lib/ask.ts`, wrapped by `app/api/ask/route.ts`)
+1. Reject empty, non-string or over-300-character questions (400), without calling the model.
+2. Exact match with an example question → its preset query (`parsedBy: "preset"`).
+3. Run the rule parser, then the LLM parser.
+4. Use the LLM's query if valid (`"llm"`), otherwise the rule parser's (`"rules"`), otherwise answer "not understood" (`null`).
+5. If the rule parser found cities and the LLM found different ones → return the rule reading as `alternative` (the UI warns).
+6. Run the engine; return `{ question, parsedBy, query, alternative, answer, llm: {ok, ms, error} }`.
+
+The route loads `deals.json`, the vocabulary, the system prompt and the API client **once per server process**.
+
+---
+
+## 7. User interface
+
+**Start page (`app/page.tsx`):** title, a subtitle saying every answer comes from real deals, six example buttons (one per main question type), and an input bar at the bottom.
+
+**Conversation:** each question and answer is appended. The examples stay available as one compact, sideways-scrolling row above the input. While an answer loads, the examples and send button are disabled.
+
+**Each answer (`app/answer.tsx`):**
+- **"What I understood" chips:** the question type and each filter in Hebrew. This is how users spot a misreading.
+- **The result:** headline number, range, percentile verdict, tables (budget, trend), ranked list, or side-by-side cards.
+- **The basis:** "based on N deals, from date to date".
+- **Notes:** widening, excluded unusual deals, "AI unavailable, parsed by keywords", and the parsers' disagreement warning.
+- **Deals:** expandable rows (native `<details>`) with price per m², floor, year, condition, features, source and date, plus warnings for flagged deals. 10 at a time, with "show more".
+- **Declines:** a plain Hebrew explanation of what the app does instead.
+
+**Accessibility and RTL:** `lang="he" dir="rtl"`, labelled input and buttons, `aria-live` on the conversation, logical CSS properties, dark mode through CSS variables, and a phone layout below 480px.
+
+**Admin (`/admin`):**
+- **Login:** one shared password (`ADMIN_PASSWORD`), compared in constant time. On success, an `HttpOnly`, `SameSite=Strict` cookie (`Secure` in production), path `/admin`, holding `<expiry>.<HMAC-SHA256(expiry)>` signed with the password. Valid for 8 hours; changing the password logs everyone out; with no password set, nobody can log in.
+- **Report (read-only):** summary cards, the quarantine, deals pending review, every flag grouped by reason, possible duplicates, every automatic fix (before → after) grouped by rule, and the thresholds.
+- **Next 16 detail:** pages that read cookies must render inside `<Suspense>` (Cache Components). The report renders only after the cookie check, so the prerendered shell contains no data. Both pages are `noindex`.
+- Links: "ניהול" in the main page's corner; "חזרה לאפליקציה" on the admin pages.
+
+---
+
+## 8. Testing
+
+| Command | What it runs | Cost |
+|---|---|---|
+| `npm test` | 80 tests (`lib/*.test.ts`) | Free, ~1s |
+| `npm run eval-llm` | The 30 shared Hebrew questions through the real model: correct count, latency, cost per 10k questions | Real API calls, < $0.01 |
+
+| Test file | Covers |
+|---|---|
+| `clean.test.ts` | CSV quoting, dates, aliases, booleans, recomputed price per m², quarantine reasons, duplicates and precedence, same-source conflicts, outliers, contradictions, neighborhood aliases |
+| `data.test.ts` | **Pins the real CSV's results** (530 → 518, which rows are quarantined or excluded, canonical cities, valid fields). Fails on any change to cleaning, by design |
+| `engine.test.ts` | Minimum 5 deals, exclusions, widening, unknown values, percentile, budget band, ranking, comparison without widening, partial years |
+| `parse-rules.test.ts` | The 31 shared Hebrew questions (all types, declines, slang) |
+| `parse-llm.test.ts` | A fake model: valid reply, code fences, unknown neighborhood, refusal, truncation, non-JSON, off-schema, timeout, dropped connection, 529 |
+| `ask.test.ts` | Input validation without a model call, LLM vs. rules choice, "not understood", the disagreement warning, presets never calling the model |
+| `examples.test.ts` | Each preset is a valid query and equals what the rule parser produces for its text |
+| `render.test.ts` | Hebrew chips, verdict bands, dates, decline messages |
+| `admin-auth.test.ts` | Password check, session expiry, forged, tampered and foreign cookies |
+
+**Practice used:** when a new test passes on its first run, break the code on purpose once to confirm the test can fail.
+
+**Not automated:** the browser UI (manual checks only), and CI (planned with deploy).
+
+---
+
+## 9. Performance and cost (measured)
+
+| Measure | Value |
+|---|---|
+| LLM parsing accuracy | 29/30 test questions (the miss is ambiguous Hebrew: "כמה עלו" = cost or went up) |
+| LLM latency | median 0.8s, max 1.3s |
+| Example question (preset) | ~40 ms end to end, no model call |
+| Engine time per question | 0.02 ms (518 deals), 1.7 ms (51,800), 19 ms (518,000) |
+| System prompt | ~4,150 tokens: ~800 instructions, ~200 value lists, ~1,600 neighborhoods, ~1,550 schema |
+| Cost per question | ~$0.00007 with the prompt cache warm |
+| At 10k questions/day | ~$21/month (cache warm); ~$135–165/month if caching never worked |
+
+**Formula** (Haiku 5.5, per million tokens: input $0.10, cache write $0.125, cache read $0.01, output $0.50):
+`cost ≈ prompt × $0.01/M + question (~26) × $0.10/M + output (~53) × $0.50/M`.
+Cost grows with the **number of distinct neighborhoods** (they're in the prompt), not with the number of deals.
+
+Hosting (Vercel Hobby) is free; a realistic interview costs a few cents in API usage.
+
+---
+
+## 10. Running locally
+
+```bash
+npm install
+cp .env.example .env.local     # then fill in both values
+npm run dev                    # cleans the data, then starts http://localhost:3000
+npm test
+npm run build && npm run start # production build locally
+```
+
+| Variable | Needed for | If missing |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | LLM parsing | Every question falls back to the rule parser |
+| `ADMIN_PASSWORD` | `/admin` | Admin login is disabled, with a message saying so |
+
+Windows note: if a security policy blocks `next-swc.win32-x64-msvc.node`, the warning is harmless; the `--webpack` flag in the scripts makes everything work. Don't run `npm run build` while `npm run start` is serving: the build replaces `.next` under the running server and its pages break until a restart.
+
+---
+
+## 11. Deploying on Vercel
+
+**Already prepared in the repo:**
+- Node 24 pinned
+- the build runs the cleaning step automatically (`prebuild`)
+- the CSV is committed and generated files are git-ignored
+- secrets are only needed at runtime
+
+A fresh clone was verified to install, build and pass all tests with **no** secrets, and to behave safely without them.
+
+**Before going public:**
+1. In the **Anthropic Console** ([platform.claude.com](https://platform.claude.com)): set a **monthly spend limit** (Limits). This is the hard cap on cost; if it's reached, the app keeps answering through the rule parser.
+2. Choose a **new, strong admin password** (16+ random characters) for the public site.
+3. Push the latest commits to GitHub.
+
+**First deploy:**
+1. [vercel.com](https://vercel.com) → **Continue with GitHub** (the account that owns the repo). The Hobby plan is free.
+2. **Add New… → Project** → import the repository. If it's not listed, use "Adjust GitHub App Permissions".
+3. **Project name** = the URL (`<name>.vercel.app`). Framework: Next.js (auto-detected); leave the build settings as they are (`npm run build`).
+4. **Environment Variables:** `ANTHROPIC_API_KEY` and `ADMIN_PASSWORD`. Tick Production (and Preview if you use previews), and mark them **Sensitive**.
+5. **Deploy.** The build takes ~1–2 minutes.
+6. **Check:** the start page loads; an example answers instantly; a typed question answers in about a second; `/admin` asks for the password and shows the report after login.
+7. Share the **production URL**, not a deployment-specific one. Send the admin password separately, if at all.
+
+**Redeploying:**
+- **Every push to `main` deploys automatically** to the same URL. The previous version stays live until the new build succeeds; a failed build never replaces the site.
+- **Rollback:** Deployments → an older deployment → **Promote to Production**.
+- **Changed an environment variable:** Deployments → latest → **Redeploy** (needed for it to take effect). Changing `ADMIN_PASSWORD` logs out all admins.
+- **Other branches** get their own preview URLs without touching production.
+- **New data:** replace `data/deals.csv`, check `/admin` locally, update `lib/data.test.ts`, commit and push (section 12).
+
+**How long it stays live:** indefinitely, until the project is deleted. To take it down: Project → Settings → Delete Project, or remove `ANTHROPIC_API_KEY` to stop spending.
+
+**Not yet on Vercel (planned, step 5c):** per-IP rate limit, daily request cap, login-attempt limit, circuit breaker, question → query cache (Upstash Redis), and a CI workflow running `npm test` on every push.
+
+---
+
+## 12. Reusing this for another project
+
+**New CSV, same columns:**
+- New city or new spelling → quarantined as "unknown city" (visible in `/admin`). Add it to `CITIES` or `CITY_ALIASES` in `lib/aliases.ts`. That one edit updates cleaning, the rule parser, the LLM prompt and the schema.
+- New neighborhoods are picked up automatically. Odd spellings go in `NEIGHBORHOOD_ALIASES`.
+- Re-check the outlier thresholds against the new data (`THRESHOLDS`).
+- Update the pinned numbers in `lib/data.test.ts` once the new report looks right.
+- Run `npm run eval-llm` to re-measure accuracy and cost (the prompt grows with neighborhoods).
+
+**Different dataset or domain** (e.g. rentals, cars, another country):
+
+| Change | Where |
+|---|---|
+| Column names, parsing and validation rules, thresholds | `lib/clean.ts` (`normalizeRow`, `THRESHOLDS`), `Deal` type |
+| Canonical values and aliases | `lib/aliases.ts` |
+| Filters and question types | `lib/schema.ts`, then `matches()` and `answer()` in `lib/engine.ts` |
+| Prompt wording (types, rules, declines) | `systemPrompt()` in `lib/parse-llm.ts` |
+| Keyword lists and number words | `lib/parse-rules.ts` |
+| Hebrew wording, chip text, decline messages | `lib/render.ts`, `app/answer.tsx` |
+| Examples and their presets | `lib/examples.ts` |
+| Test questions | `lib/questions.ts` |
+| Admin report labels | `app/admin/page.tsx` |
+
+**Keep unchanged** (the reusable core):
+- the LLM ↔ engine boundary (the model only produces a validated query)
+- the fallback parser with the same schema
+- minimum sample size and visible n
+- the fix / flag / quarantine discipline with a logged report
+- presets for example questions
+- the signed-cookie admin
+- the testing approach (fake model, pinned real-data results, live evaluation script)
+
+**Order to build it in** (as done here):
+1. Rules files (`AGENTS.md`, `DECISIONS.md`, `AI-LOG.md`).
+2. Scaffold.
+3. Cleaning, plus a **review checkpoint** on the quality report.
+4. Schema, engine and rule parser: a working app with no LLM.
+5. LLM parser with evaluation and measured cost.
+6. UI.
+7. Admin.
+8. Deploy.
+9. Guards (rate limit, cap, cache).
+10. README.
+
+---
+
+## 13. Status
 
 | # | Step | Status | Commits |
 |---|---|---|---|
-| 0 | Project setup: rules (`AGENTS.md`), `DECISIONS.md`, `AI-LOG.md`, raw data | Done | `5ace883` |
+| 0 | Project setup: rules, decisions, AI log, raw data | Done | `5ace883` |
 | 1 | Next.js scaffold, Hebrew RTL layout | Done | `8609d2c` |
-| 2 | Deterministic cleaning, per-row change log, quality report, tests. **Checkpoint:** outlier threshold reviewed with the data (2.5×) | Done | `be8f44c`, `f71ada0` |
-| 3 | Query schema, engine (7 question types, widening, minimum 5 deals), rule-based Hebrew parser, tests | Done | `075bd21` |
-| 4 | LLM parser (Claude Haiku 5.5), `/api/ask` with fallback and cross-check, accuracy check against real model, cost measurement | Done | `e0b2c6c` → `bae5e96` |
-| 5a | UI: start page with examples, chat-style answers per question type, expandable deals | Done | `17d2198` → `0721c18` |
-| 5b | Deploy: Vercel, Anthropic key as an environment variable, spend limit in the console | To do | |
-| 5c | Abuse and cost guards: per-IP rate limit, daily request cap (then rules only), circuit breaker, cache of parsed questions (Upstash Redis) | To do | |
-| 5d | Admin page `/admin` (password login): every data-quality issue, read-only | Done | (this commit) |
-| 6 | Wrap-up: README (what, why, costs, shortcuts), architecture diagram, teaching topic for the session | To do | |
-| — | Optional: quarantine → LLM-suggested aliases → token-protected admin approval page | First to cut | |
+| 2 | Cleaning, change log, quality report, tests; outlier threshold reviewed with the data (2.5×) | Done | `be8f44c`, `f71ada0` |
+| 3 | Schema, engine, rule parser, tests | Done | `075bd21` |
+| 4 | LLM parser, `/api/ask`, live evaluation, measured cost | Done | `e0b2c6c` → `bae5e96` |
+| 5a | Chat UI, answers per type, expandable deals, examples row | Done | `17d2198` → `0721c18` |
+| 5b | Deploy on Vercel | **Ready; not deployed yet** | `eeebd12` (Node 24 pin) |
+| 5c | Rate limit, daily cap, login-attempt limit, circuit breaker, query cache (Redis), CI | To do | |
+| 5d | Password-protected read-only admin page | Done | `cd08687`, `8ebf7bd` |
+| 5e | Precomputed example queries | Done | `e8cbb78` |
+| — | Tests for the API logic and the real data | Done | `4a01b29` |
+| 6 | README, architecture diagram, teaching topic | To do | |
+| — | Optional: LLM-suggested aliases with admin approval | Deferred | |
 
-## Question types (agreed scope)
-
-Search, statistic, price check, budget, ranking, comparison, trend. Declined with a Hebrew explanation: forecasts, investment advice, anything not in the data (rent, schools, asking prices, places outside the dataset). Coverage questions ("which cities do you have") were removed because they would expose the dataset's size and coverage.
-
-## Changes from the original plan
-
+### Changes from the original plan
 | Planned | What happened | Why |
 |---|---|---|
-| Model output forced into the schema by the API's structured outputs | Plain JSON in the reply, validated by our zod schema | The API rejected the schema as too complex after ~40s (`AI-LOG.md`) |
-| Outlier flag at 3× the city median | 2.5×, flagged for human review, excluded from statistics | 3× flagged nothing; 2.5× catches exactly the two implausible penthouses |
-| Turbopack (Next 16 default) | Webpack (`--webpack`) | Windows Application Control blocks Next's native compiler on the dev machine |
-| Cost "a few dollars a month" at 10k/day | Measured ~$21/month with a warm prompt cache, worst case ~$165 | The estimate was never measured; now it is (`DECISIONS.md`) |
-| Single start page; results replace it | Examples stay as a compact row above the input during a conversation | Users couldn't get back to the examples |
-| Source-precedence admin UI | Precedence lives in config | 4 conflicting rows don't justify a UI |
+| Model output forced by the API's structured outputs | Plain JSON reply validated by zod | "Schema is too complex" after ~40s (`AI-LOG.md`) |
+| Outlier flag at 3× | 2.5×, pending human review | 3× flagged nothing; 2.5× catches exactly the two implausible penthouses |
+| Turbopack | Webpack | Windows Application Control blocks Next's native compiler |
+| Cost "a few dollars a month" | Measured ~$21/month (warm cache) | The first estimate was unmeasured |
+| Results replace the start page | Examples stay above the input | Users couldn't get back to the examples |
+| Source-precedence admin UI / public data-quality page | Precedence in config; quality report behind an admin login | 4 conflicting rows don't justify a UI; the report shouldn't be public |
+| Pre-filled filter form when nothing is understood | Not built: a Hebrew message with guidance instead | Scope |
 
-## Measured so far
-
-- Cleaning: 530 rows in → 518 deals, 2 quarantined (₪0, ₪18,000), 2 suspected outliers pending review, every change logged.
-- LLM parsing: 29/30 Hebrew test questions correct; median 0.8s, max 1.3s. The miss is genuinely ambiguous ("כמה עלו" = cost, or went up?).
-- Cost: ~$0.00007 per question with the prompt cache warm (~$21/month at 10k/day).
-- Tests: 80 passing (`npm test`), including the `/api/ask` logic with a fake model and a regression test pinning what cleaning produces from the real CSV. Live accuracy check: `npm run eval-llm`.
-
-## Not verified yet
-
-- The UI only through server rendering and API calls, plus the user's manual testing; no automated browser test (Playwright may be blocked by the machine's Application Control policy).
-- Tests don't run automatically yet; a CI workflow is planned with the deploy step.
-- Anything on Vercel: the build there, cold starts, environment variables.
-- Behavior under real load and abuse (rate limiting doesn't exist yet).
+### Not verified yet
+- The UI in an automated browser (only server rendering, API calls and manual use).
+- Anything on Vercel itself: its build, cold starts, environment variables.
+- Behavior under real load or abuse (no rate limiting yet).
