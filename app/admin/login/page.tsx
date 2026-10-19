@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { SESSION_COOKIE, sessionValid } from "@/lib/admin-auth.ts";
@@ -33,6 +34,7 @@ async function Login({ searchParams }: Pick<PageProps<"/admin/login">, "searchPa
           <button type="submit">כניסה</button>
         </form>
       )}
+      <Link href="/" className="back">חזרה לאפליקציה</Link>
     </main>
   );
 }

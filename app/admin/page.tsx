@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { SESSION_COOKIE, sessionValid } from "@/lib/admin-auth.ts";
@@ -124,7 +125,10 @@ async function Report() {
           <h1>דוח איכות נתונים</h1>
           <p className="note">תצוגה בלבד. הנתונים הגולמיים לא משתנים; כל תיקון נעשה בשלב הניקוי ומתועד כאן.</p>
         </div>
-        <form action={logout}><button type="submit">יציאה</button></form>
+        <div className="actions">
+          <Link href="/">חזרה לאפליקציה</Link>
+          <form action={logout}><button type="submit">יציאה</button></form>
+        </div>
       </header>
 
       <section className="cards">

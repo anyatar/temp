@@ -387,3 +387,27 @@ td {
   border: none;
   padding-block: 0.6rem;
 }
+
+/* Small top-corner link to the admin page */
+.topbar {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 0.75rem;
+}
+.topbar a,
+.admin .actions a,
+.admin .back {
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-decoration: underline;
+}
+.topbar a:hover,
+.admin .actions a:hover,
+.admin .back:hover {
+  color: var(--accent);
+}
+.admin .actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}

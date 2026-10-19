@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { AnswerView, type AskResponse } from "./answer.tsx";
 
@@ -60,6 +61,9 @@ export default function Home() {
 
   return (
     <main className="chat">
+      <nav className="topbar">
+        <Link href="/admin">ניהול</Link>
+      </nav>
       {turns.length === 0 ? (
         <section className="welcome">
           <h1>שאלו על עסקאות נדל״ן</h1>
