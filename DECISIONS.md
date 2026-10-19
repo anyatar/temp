@@ -76,6 +76,9 @@ Short record of what we chose and why. Update when a decision changes.
   - Not checked: elevator in a low building (plausible in private houses).
   - Thresholds live in `THRESHOLDS` in `lib/clean.ts` and are copied into `quality.json`.
 
+## Build tooling
+- **`dev` and `build` use Webpack (`--webpack`), not Next 16's default Turbopack.** On the development machine, Windows Application Control blocks Next's native compiler (`next-swc.win32-x64-msvc.node`); Next falls back to a WebAssembly compiler, which doesn't support Turbopack. Webpack works everywhere, including Vercel, at the cost of slower builds, which don't matter at this size. The "Attempted to load @next/swc-win32-x64-msvc" warning still prints locally and is harmless.
+
 ## Later / cut
 - **Unparseable values:** the LLM suggests alias mappings offline, they pass the same validators, a human approves, and they become deterministic rules. Approval through a token-protected one-page admin UI. **First to cut** if time runs short.
 - Source-precedence admin UI: dropped; precedence stays in config.

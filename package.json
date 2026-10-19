@@ -6,9 +6,9 @@
   "scripts": {
     "clean-data": "node scripts/clean.ts",
     "predev": "npm run clean-data",
-    "dev": "next dev",
+    "dev": "next dev --webpack",
     "prebuild": "npm run clean-data",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "test": "node --test \"lib/*.test.ts\"",
     "eval-llm": "node --env-file=.env.local scripts/eval-llm.ts"
