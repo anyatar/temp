@@ -29,7 +29,7 @@ The LLM never sees deal rows and never writes numbers. If it is slow, down or wr
 | 5a | UI: start page with examples, chat-style answers per question type, expandable deals | Done | `17d2198` → `0721c18` |
 | 5b | Deploy: Vercel, Anthropic key as an environment variable, spend limit in the console | To do | |
 | 5c | Abuse and cost guards: per-IP rate limit, daily request cap (then rules only), circuit breaker, cache of parsed questions (Upstash Redis) | To do | |
-| 5d | Read-only `/data-quality` page rendering `quality.json` | To do | |
+| 5d | Admin page `/admin` (password login): every data-quality issue, read-only | Done | (this commit) |
 | 6 | Wrap-up: README (what, why, costs, shortcuts), architecture diagram, teaching topic for the session | To do | |
 | — | Optional: quarantine → LLM-suggested aliases → token-protected admin approval page | First to cut | |
 
@@ -53,7 +53,7 @@ Search, statistic, price check, budget, ranking, comparison, trend. Declined wit
 - Cleaning: 530 rows in → 518 deals, 2 quarantined (₪0, ₪18,000), 2 suspected outliers pending review, every change logged.
 - LLM parsing: 29/30 Hebrew test questions correct; median 0.8s, max 1.3s. The miss is genuinely ambiguous ("כמה עלו" = cost, or went up?).
 - Cost: ~$0.00007 per question with the prompt cache warm (~$21/month at 10k/day).
-- Tests: 70 passing (`npm test`), including the `/api/ask` logic with a fake model and a regression test pinning what cleaning produces from the real CSV. Live accuracy check: `npm run eval-llm`.
+- Tests: 76 passing (`npm test`), including the `/api/ask` logic with a fake model and a regression test pinning what cleaning produces from the real CSV. Live accuracy check: `npm run eval-llm`.
 
 ## Not verified yet
 

@@ -79,6 +79,12 @@ Short record of what we chose and why. Update when a decision changes.
 ## Build tooling
 - **`dev` and `build` use Webpack (`--webpack`), not Next 16's default Turbopack.** On the development machine, Windows Application Control blocks Next's native compiler (`next-swc.win32-x64-msvc.node`); Next falls back to a WebAssembly compiler, which doesn't support Turbopack. Webpack works everywhere, including Vercel, at the cost of slower builds, which don't matter at this size. The "Attempted to load @next/swc-win32-x64-msvc" warning still prints locally and is harmless.
 
+## Admin page
+- **`/admin` shows every data-quality issue, read-only:** quarantined rows, deals pending review, all flags by reason, possible duplicates, every automatic fix (before → after), and the thresholds. No editing: decisions about the data stay in code and config, where they are reviewed and reproducible.
+- **Access: one shared password** (`ADMIN_PASSWORD` environment variable), no user accounts. A successful login sets an `HttpOnly`, `SameSite=Strict` cookie holding an expiry signed with HMAC (8 hours). Changing the password logs everyone out. Without `ADMIN_PASSWORD` set, nobody can log in.
+- **The report renders only after the cookie check**, inside a Suspense boundary (required by Next 16 with Cache Components); the prerendered shell contains no data. The page is marked `noindex`.
+- Shortcut: no limit on login attempts yet; per-IP rate limiting comes with the deploy step.
+
 ## Later / cut
 - **Unparseable values:** the LLM suggests alias mappings offline, they pass the same validators, a human approves, and they become deterministic rules. Approval through a token-protected one-page admin UI. **First to cut** if time runs short.
 - Source-precedence admin UI: dropped; precedence stays in config.

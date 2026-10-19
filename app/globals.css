@@ -307,3 +307,83 @@ td {
     gap: 0.2rem;
   }
 }
+
+/* Admin */
+.admin {
+  max-width: 72rem;
+  margin-inline: auto;
+  padding: 2rem 1rem 4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+.admin header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+.admin h2 {
+  font-size: 1.2rem;
+  margin-bottom: 0.4rem;
+}
+.admin button {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.4rem 1rem;
+  cursor: pointer;
+}
+.admin details {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.8rem;
+  margin-top: 0.5rem;
+}
+.admin details summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.admin details table {
+  margin-top: 0.5rem;
+  font-size: 0.9rem;
+}
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.75rem;
+}
+.cards div {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 0.8rem 1rem;
+  color: var(--muted);
+}
+.cards strong {
+  display: block;
+  font-size: 1.6rem;
+  color: var(--foreground);
+}
+.admin.login {
+  max-width: 22rem;
+  margin-top: 15vh;
+}
+.admin.login form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.admin.login input {
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.6rem 0.8rem;
+  background: var(--surface);
+}
+.admin.login button[type="submit"] {
+  background: var(--accent);
+  color: #ffffff;
+  border: none;
+  padding-block: 0.6rem;
+}
