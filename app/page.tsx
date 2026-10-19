@@ -49,17 +49,22 @@ export default function Home() {
     }
   }
 
+  // On the start page they wrap in the middle; during a conversation they stay one scrollable row above the input.
+  const examples = (
+    <div className={turns.length ? "examples compact" : "examples"} aria-label="שאלות לדוגמה">
+      {EXAMPLES.map((q) => (
+        <button key={q} type="button" disabled={busy} onClick={() => ask(q)}>{q}</button>
+      ))}
+    </div>
+  );
+
   return (
     <main className="chat">
       {turns.length === 0 ? (
         <section className="welcome">
           <h1>שאלו על עסקאות נדל״ן</h1>
           <p>כל תשובה מחושבת מעסקאות שנסגרו בפועל, ומראה על כמה עסקאות היא מבוססת</p>
-          <div className="examples">
-            {EXAMPLES.map((q) => (
-              <button key={q} type="button" onClick={() => ask(q)}>{q}</button>
-            ))}
-          </div>
+          {examples}
         </section>
       ) : (
         <div className="thread" aria-live="polite">
@@ -73,6 +78,7 @@ export default function Home() {
         </div>
       )}
 
+      {turns.length > 0 && examples}
       <form
         className="composer"
         onSubmit={(e) => {
